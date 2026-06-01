@@ -137,7 +137,7 @@
     </div>
 
     <script>
-        // ⚠️ สำคัญมาก: พี่ธงเอา URL ของ Web App ฝั่ง GAS ที่ก๊อปปี้มาวางแทนที่ตรงนี้ครับ ⚠️
+        // ⚠️ สำคัญมาก: เอา URL ของ Web App ฝั่ง GAS ของพี่ธงมาวางแทนที่ตรงนี้ ⚠️
         const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwJvRJyluI1W565YAtZWPa0tG2OYwh1aVwwrjQFH1lKPxoux8uQHOsWIUfqG9t7LPmi/exec";
         
         let globalData = [];
@@ -152,7 +152,6 @@
 
             try {
                 let dataPayload;
-                // ถ้ายังเป็นลิงก์จำลองระบบ จะแสดงข้อมูล Mock data ให้เห็นผลลัพธ์หน้าตากราฟก่อนเพื่อทดสอบหน้าเว็บ
                 if(GAS_WEB_APP_URL.includes("YOUR_DEPLOYED_SCRIPT_ID")) {
                     console.log("กำลังแสดงผลแบบจำลองโครงสร้าง กรุณาเปลี่ยนลิงก์ GAS_WEB_APP_URL เป็นลิงก์ของพี่ธงเพื่อเชื่อมข้อมูลจริง");
                     dataPayload = getMockData();
@@ -177,7 +176,6 @@
                 syncStatus.innerHTML = `❌ เกิดข้อผิดพลาดในการโหลดข้อมูล`;
                 syncStatus.className = "text-xs bg-red-500/10 text-red-400 px-2.5 py-1 rounded-full border border-red-500/20 flex items-center gap-1.5";
                 
-                // ดึงโครงสร้างจำลองกรณีเชื่อมต่อขัดข้องชั่วคราว
                 const mock = getMockData();
                 globalData = mock.data;
                 updateMetrics(mock.summary);
@@ -242,13 +240,21 @@
 
             // 2. วาดกราฟแท่งแสดงแยกชนิดถัง (Bar Chart)
             const typeCtx = document.getElementById('chart-type').getContext('2d');
-            const typeLabels = Object.keys(summary.types || {});
+            const rawTypeLabels = Object.keys(summary.types || {});
             const typeValues = Object.values(summary.types || {});
+            
+            const shortTypeLabels = rawTypeLabels.map(label => {
+                if (label.includes("สีแดง")) return "ถังสีแดง (Dry)";
+                if (label.includes("สีเขียว")) return "ถังสีเขียว (Non)";
+                if (label.includes("CO2")) return "ถัง CO2";
+                if (label.length > 15) return label.substring(0, 15) + "...";
+                return label;
+            });
 
             chartTypeInstance = new Chart(typeCtx, {
                 type: 'bar',
                 data: {
-                    labels: typeLabels,
+                    labels: shortTypeLabels,
                     datasets: [{
                         label: 'จำนวน (ถัง)',
                         data: typeValues,
@@ -260,11 +266,26 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
-                        y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', stepSize: 1 } }
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { 
+                                color: '#94a3b8',
+                                maxRotation: 0,
+                                minRotation: 0,
+                                font: { size: 10 }
+                            } 
+                        },
+                        y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', stepSize: 5 } }
                     },
                     plugins: {
-                        legend: { display: false }
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    return rawTypeLabels[context[0].dataIndex];
+                                }
+                            }
+                        }
                     }
                 }
             });
@@ -275,26 +296,27 @@
             const tbody = document.getElementById('table-body');
             tbody.innerHTML = '';
 
-            if (data.length === 0) {
+            if (!data || data.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-500">ไม่พบข้อมูลตามเงื่อนไขที่ค้นหา</td></tr>`;
                 return;
             }
 
             data.forEach((item, index) => {
                 let statusBadge = '';
-                if (item.status.includes("ปกติ") || item.status.includes("พร้อม")) {
-                    statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-xs">${item.status}</span>`;
+                let statusText = item.status || 'ไม่ระบุสถานะ';
+                if (statusText.includes("ปกติ") || statusText.includes("พร้อม")) {
+                    statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-xs">${statusText}</span>`;
                 } else {
-                    statusBadge = `<span class="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full text-xs">${item.status}</span>`;
+                    statusBadge = `<span class="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full text-xs">${statusText}</span>`;
                 }
 
                 const row = `
                     <tr class="hover:bg-slate-700/30 transition-colors">
                         <td class="p-3 text-slate-400 font-medium">${index + 1}</td>
-                        <td class="p-3 font-semibold text-white">${item.type}</td>
-                        <td class="p-3 text-slate-300">${item.size}</td>
-                        <td class="p-3 text-slate-300"><span class="bg-slate-900 px-2 py-0.5 rounded text-slate-400">${item.location}</span></td>
-                        <td class="p-3 text-slate-400">${item.point}</td>
+                        <td class="p-3 font-semibold text-white">${item.type || '-'}</td>
+                        <td class="p-3 text-slate-300">${item.size || '-'}</td>
+                        <td class="p-3 text-slate-300"><span class="bg-slate-900 px-2 py-0.5 rounded text-slate-400">${item.location || '-'}</span></td>
+                        <td class="p-3 text-slate-400">${item.point || '-'}</td>
                         <td class="p-3 text-center">${statusBadge}</td>
                     </tr>
                 `;
@@ -302,33 +324,46 @@
             });
         }
 
-        // ระบบตัวกรองช่องค้นหาแบบพิมพ์ปุ๊บค้นปั๊บ (Instant Search Filter)
+        // 🔧 [จุดแก้ไขสำคัญ]: ระบบค้นหาและคัดกรองข้อมูลที่แก้บั๊กภาษาไทยและค่าว่างเรียบร้อยแล้ว
         function filterTable() {
-            const query = document.getElementById('search-input').value.toLowerCase();
+            const query = document.getElementById('search-input').value.toLowerCase().trim();
+            
+            if (query === "") {
+                renderTable(globalData);
+                return;
+            }
+
             const filtered = globalData.filter(item => {
-                return item.type.toLowerCase().includes(query) || 
-                       item.location.toLowerCase().includes(query) || 
-                       item.point.toLowerCase().includes(query) ||
-                       item.status.toLowerCase().includes(query);
+                // แปลงข้อมูลทุกช่องให้แน่ใจว่าเป็น String และไม่เป็นค่าว่างเปล่า (ป้องกันการเกิดโค้ด Error)
+                const typeStr = item.type ? String(item.type).toLowerCase() : "";
+                const locStr = item.location ? String(item.location).toLowerCase() : "";
+                const pointStr = item.point ? String(item.point).toLowerCase() : "";
+                const statusStr = item.status ? String(item.status).toLowerCase() : "";
+                const sizeStr = item.size ? String(item.size).toLowerCase() : "";
+
+                return typeStr.includes(query) || 
+                       locStr.includes(query) || 
+                       pointStr.includes(query) ||
+                       statusStr.includes(query) ||
+                       sizeStr.includes(query);
             });
+            
             renderTable(filtered);
         }
 
-        // ชุดข้อมูลตัวอย่างสำหรับใช้ทดสอบการเปิดหน้าเว็บครั้งแรกบน GitHub ก่อนผูกลิงก์หลักสคริปต์
+        // ชุดข้อมูลจำลอง
         function getMockData() {
             return {
                 status: "success",
                 summary: {
                     total: 12,
-                    types: { "ถังเคมีแห้ง (สีแดง)": 6, "ถัง CO2 (สีเขียว)": 4, "ถังโฟม": 2 },
-                    status: { "ปกติพร้อมใช้งาน": 10, "ชำรุดเกจตก": 2 },
+                    types: { "ถังสีแดง (ผงเคมีแห้ง - Dry)": 6, "ถังสีเขียว (น้ำยาเหลวระเหย)": 4, "ถังดับเพลิง CO2": 2 },
+                    status: { "ปกติ": 10, "ไม่ระบุสถานะ": 2 },
                     locations: { "อาคารหลัก": 5, "โรงละคร": 4, "ลานจอดรถ": 3 }
                 },
                 data: [
-                    { type: "ถังเคมีแห้ง (สีแดง)", size: "15 ปอนด์", location: "อาคารหลัก", point: "หน้าห้องสำนักงาน", status: "ปกติพร้อมใช้งาน" },
-                    { type: "ถัง CO2 (สีเขียว)", size: "10 ปอนด์", location: "โรงละคร", point: "ข้างเวทีฝั่งซ้าย", status: "ปกติพร้อมใช้งาน" },
-                    { type: "ถังเคมีแห้ง (สีแดง)", size: "15 ปอนด์", location: "ลานจอดรถ", point: "ซุ้ม รปภ. ประตูหน้า", status: "ชำรุดเกจตก" },
-                    { type: "ถังโฟม", size: "10 ลิตร", location: "อาคารหลัก", point: "ห้องครัวด้านหลัง", status: "ปกติพร้อมใช้งาน" }
+                    { type: "ถังสีแดง (ผงเคมีแห้ง - Dry)", size: "15 lbs", location: "ร้านโจ๊ก", point: "หลังร้านฝั่งระเบียง", status: "ไม่ระบุสถานะ" },
+                    { type: "ถังสีเขียว (น้ำยาเหลวระเหย)", size: "10 lbs", location: "ช่วงหงส์คำ", point: "หลังเวทีซ้าย", status: "ปกติ" }
                 ]
             };
         }
