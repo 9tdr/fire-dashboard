@@ -1,1 +1,339 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fire Extinguisher Smart Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0f172a',
+                        darkCard: '#1e293b',
+                        accentRed: '#ef4444',
+                        accentGreen: '#10b981',
+                        accentOrange: '#f59e0b',
+                        accentBlue: '#3b82f6'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #0f172a;
+        }
+        /* ซ่อน Scrollbar ของตารางสำหรับหน้าจอมือถือแต่ยังใช้นิ้วปัดเลื่อนขวาได้ */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen p-4 md:p-6">
 
+    <div class="max-w-7xl mx-auto mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="p-2 bg-red-500/10 text-red-500 rounded-lg">🧯</span>
+                <h1 class="text-xl md:text-2xl font-bold tracking-tight">ระบบแดชบอร์ดตรวจสอบถังดับเพลิง</h1>
+            </div>
+            <p class="text-xs md:text-sm text-slate-400 mt-1">ศูนย์วัฒนธรรมเชียงใหม่ • อัปเดตข้อมูลแบบ Real-time จาก AppSheet</p>
+        </div>
+        <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <span id="sync-status" class="text-xs bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> เชื่อมต่อสำเร็จ
+            </span>
+            <button onclick="fetchDashboardData()" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg border border-slate-600 transition-all flex items-center gap-1">
+                🔄 รีเฟรช
+            </button>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-xl shadow-lg flex flex-col justify-between">
+                <span class="text-xs font-medium text-slate-400">ถังดับเพลิงทั้งหมด</span>
+                <div class="flex items-baseline gap-2 mt-2">
+                    <span id="metric-total" class="text-2xl md:text-4xl font-extrabold text-white">0</span>
+                    <span class="text-xs text-slate-400">ถัง</span>
+                </div>
+            </div>
+            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-xl shadow-lg flex flex-col justify-between">
+                <span class="text-xs font-medium text-slate-400">สภาพพร้อมใช้งาน</span>
+                <div class="flex items-baseline gap-2 mt-2">
+                    <span id="metric-normal" class="text-2xl md:text-4xl font-extrabold text-emerald-400">0</span>
+                    <span class="text-xs text-slate-400">ถัง</span>
+                </div>
+            </div>
+            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-xl shadow-lg flex flex-col justify-between">
+                <span class="text-xs font-medium text-slate-400">ชำรุด / ต้องบรรจุใหม่</span>
+                <div class="flex items-baseline gap-2 mt-2">
+                    <span id="metric-warning" class="text-2xl md:text-4xl font-extrabold text-amber-500">0</span>
+                    <span class="text-xs text-slate-400">ถัง</span>
+                </div>
+            </div>
+            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-xl shadow-lg flex flex-col justify-between">
+                <span class="text-xs font-medium text-slate-400">จำนวนพื้นที่ติดตั้ง</span>
+                <div class="flex items-baseline gap-2 mt-2">
+                    <span id="metric-locations" class="text-2xl md:text-4xl font-extrabold text-blue-400">0</span>
+                    <span class="text-xs text-slate-400">โซน</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md">
+                <h3 class="text-sm font-bold text-slate-300 mb-4 flex items-center gap-1.5">
+                    <span class="w-1.5 h-3 bg-red-500 rounded-sm"></span> สัดส่วนสถานะอุปกรณ์
+                </h3>
+                <div class="relative h-64 flex justify-center items-center">
+                    <canvas id="chart-status"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md">
+                <h3 class="text-sm font-bold text-slate-300 mb-4 flex items-center gap-1.5">
+                    <span class="w-1.5 h-3 bg-blue-500 rounded-sm"></span> จำนวนแยกตามชนิดถัง
+                </h3>
+                <div class="relative h-64 flex justify-center items-center">
+                    <canvas id="chart-type"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-md overflow-hidden">
+            <div class="p-4 border-b border-slate-700 bg-slate-800/80 flex justify-between items-center flex-wrap gap-2">
+                <h3 class="text-sm font-bold text-slate-300 flex items-center gap-1.5">
+                    <span class="w-1.5 h-3 bg-emerald-500 rounded-sm"></span> รายการถังดับเพลิงและจุดติดตั้งทั้งหมด
+                </h3>
+                <input type="text" id="search-input" oninput="filterTable()" placeholder="🔍 ค้นหา ชนิด, สถานที่, จุดติดตั้ง..." class="text-xs bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 w-full sm:w-64 text-slate-200 focus:outline-none focus:border-red-500">
+            </div>
+            
+            <div class="overflow-x-auto no-scrollbar">
+                <table class="w-full text-left border-collapse text-xs md:text-sm">
+                    <thead>
+                        <tr class="bg-slate-900/60 text-slate-400 border-b border-slate-700 uppercase font-semibold">
+                            <th class="p-3">ลำดับ</th>
+                            <th class="p-3">ชนิดถังดับเพลิง</th>
+                            <th class="p-3">ขนาด</th>
+                            <th class="p-3">สถานที่ติดตั้ง</th>
+                            <th class="p-3">จุดติดตั้งละเอียด</th>
+                            <th class="p-3 text-center">สถานะอุปกรณ์</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body" class="divide-y divide-slate-700/50">
+                        <tr>
+                            <td colspan="6" class="p-8 text-center text-slate-500">กำลังโหลดข้อมูลจาก Google Sheets...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ⚠️ สำคัญมาก: พี่ธงเอา URL ของ Web App ฝั่ง GAS ที่ก๊อปปี้มาวางแทนที่ตรงนี้ครับ ⚠️
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwJvRJyluI1W565YAtZWPa0tG2OYwh1aVwwrjQFH1lKPxoux8uQHOsWIUfqG9t7LPmi/exec";
+        
+        let globalData = [];
+        let chartStatusInstance = null;
+        let chartTypeInstance = null;
+
+        // ฟังก์ชันดึงข้อมูลจากหลังบ้าน
+        async function fetchDashboardData() {
+            const syncStatus = document.getElementById('sync-status');
+            syncStatus.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> กำลังดึงข้อมูล...`;
+            syncStatus.className = "text-xs bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-full border border-amber-500/20 flex items-center gap-1.5";
+
+            try {
+                let dataPayload;
+                // ถ้ายังเป็นลิงก์จำลองระบบ จะแสดงข้อมูล Mock data ให้เห็นผลลัพธ์หน้าตากราฟก่อนเพื่อทดสอบหน้าเว็บ
+                if(GAS_WEB_APP_URL.includes("YOUR_DEPLOYED_SCRIPT_ID")) {
+                    console.log("กำลังแสดงผลแบบจำลองโครงสร้าง กรุณาเปลี่ยนลิงก์ GAS_WEB_APP_URL เป็นลิงก์ของพี่ธงเพื่อเชื่อมข้อมูลจริง");
+                    dataPayload = getMockData();
+                } else {
+                    const response = await fetch(GAS_WEB_APP_URL);
+                    dataPayload = await response.json();
+                }
+
+                if (dataPayload.status === "success") {
+                    globalData = dataPayload.data;
+                    updateMetrics(dataPayload.summary);
+                    renderCharts(dataPayload.summary);
+                    renderTable(globalData);
+
+                    syncStatus.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> เชื่อมต่อสำเร็จ`;
+                    syncStatus.className = "text-xs bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5";
+                } else {
+                    throw new Error(dataPayload.message || "โครงสร้างข้อมูลไม่ถูกต้อง");
+                }
+            } catch (error) {
+                console.error(error);
+                syncStatus.innerHTML = `❌ เกิดข้อผิดพลาดในการโหลดข้อมูล`;
+                syncStatus.className = "text-xs bg-red-500/10 text-red-400 px-2.5 py-1 rounded-full border border-red-500/20 flex items-center gap-1.5";
+                
+                // ดึงโครงสร้างจำลองกรณีเชื่อมต่อขัดข้องชั่วคราว
+                const mock = getMockData();
+                globalData = mock.data;
+                updateMetrics(mock.summary);
+                renderCharts(mock.summary);
+                renderTable(mock.data);
+            }
+        }
+
+        // อัปเดตข้อมูลบนหน้าการ์ดนับจำนวน
+        function updateMetrics(summary) {
+            document.getElementById('metric-total').innerText = summary.total || 0;
+            
+            let normalCount = 0;
+            let warningCount = 0;
+            for (const [key, val] of Object.entries(summary.status || {})) {
+                if (key.includes("ปกติ") || key.includes("พร้อม")) {
+                    normalCount += val;
+                } else {
+                    warningCount += val;
+                }
+            }
+            
+            document.getElementById('metric-normal').innerText = normalCount;
+            document.getElementById('metric-warning').innerText = warningCount;
+            document.getElementById('metric-locations').innerText = Object.keys(summary.locations || {}).length;
+        }
+
+        // วาดกราฟแสดงผลสถิติเชิงลึก
+        function renderCharts(summary) {
+            if (chartStatusInstance) chartStatusInstance.destroy();
+            if (chartTypeInstance) chartTypeInstance.destroy();
+
+            // 1. วาดกราฟสถานะอุปกรณ์ (Doughnut Chart)
+            const statusCtx = document.getElementById('chart-status').getContext('2d');
+            const statusLabels = Object.keys(summary.status || {});
+            const statusValues = Object.values(summary.status || {});
+            const statusColors = statusLabels.map(label => {
+                if (label.includes("ปกติ") || label.includes("พร้อม")) return '#10b981';
+                if (label.includes("ชำรุด") || label.includes("เกจตก") || label.includes("หมดอายุ")) return '#ef4444';
+                return '#f59e0b';
+            });
+
+            chartStatusInstance = new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: statusLabels,
+                    datasets: [{
+                        data: statusValues,
+                        backgroundColor: statusColors,
+                        borderWidth: 1,
+                        borderColor: '#1e293b'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } }
+                    }
+                }
+            });
+
+            // 2. วาดกราฟแท่งแสดงแยกชนิดถัง (Bar Chart)
+            const typeCtx = document.getElementById('chart-type').getContext('2d');
+            const typeLabels = Object.keys(summary.types || {});
+            const typeValues = Object.values(summary.types || {});
+
+            chartTypeInstance = new Chart(typeCtx, {
+                type: 'bar',
+                data: {
+                    labels: typeLabels,
+                    datasets: [{
+                        label: 'จำนวน (ถัง)',
+                        data: typeValues,
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', stepSize: 1 } }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // โหลดแถวข้อมูลลงตาราง
+        function renderTable(data) {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-500">ไม่พบข้อมูลตามเงื่อนไขที่ค้นหา</td></tr>`;
+                return;
+            }
+
+            data.forEach((item, index) => {
+                let statusBadge = '';
+                if (item.status.includes("ปกติ") || item.status.includes("พร้อม")) {
+                    statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-xs">${item.status}</span>`;
+                } else {
+                    statusBadge = `<span class="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full text-xs">${item.status}</span>`;
+                }
+
+                const row = `
+                    <tr class="hover:bg-slate-700/30 transition-colors">
+                        <td class="p-3 text-slate-400 font-medium">${index + 1}</td>
+                        <td class="p-3 font-semibold text-white">${item.type}</td>
+                        <td class="p-3 text-slate-300">${item.size}</td>
+                        <td class="p-3 text-slate-300"><span class="bg-slate-900 px-2 py-0.5 rounded text-slate-400">${item.location}</span></td>
+                        <td class="p-3 text-slate-400">${item.point}</td>
+                        <td class="p-3 text-center">${statusBadge}</td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
+        // ระบบตัวกรองช่องค้นหาแบบพิมพ์ปุ๊บค้นปั๊บ (Instant Search Filter)
+        function filterTable() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const filtered = globalData.filter(item => {
+                return item.type.toLowerCase().includes(query) || 
+                       item.location.toLowerCase().includes(query) || 
+                       item.point.toLowerCase().includes(query) ||
+                       item.status.toLowerCase().includes(query);
+            });
+            renderTable(filtered);
+        }
+
+        // ชุดข้อมูลตัวอย่างสำหรับใช้ทดสอบการเปิดหน้าเว็บครั้งแรกบน GitHub ก่อนผูกลิงก์หลักสคริปต์
+        function getMockData() {
+            return {
+                status: "success",
+                summary: {
+                    total: 12,
+                    types: { "ถังเคมีแห้ง (สีแดง)": 6, "ถัง CO2 (สีเขียว)": 4, "ถังโฟม": 2 },
+                    status: { "ปกติพร้อมใช้งาน": 10, "ชำรุดเกจตก": 2 },
+                    locations: { "อาคารหลัก": 5, "โรงละคร": 4, "ลานจอดรถ": 3 }
+                },
+                data: [
+                    { type: "ถังเคมีแห้ง (สีแดง)", size: "15 ปอนด์", location: "อาคารหลัก", point: "หน้าห้องสำนักงาน", status: "ปกติพร้อมใช้งาน" },
+                    { type: "ถัง CO2 (สีเขียว)", size: "10 ปอนด์", location: "โรงละคร", point: "ข้างเวทีฝั่งซ้าย", status: "ปกติพร้อมใช้งาน" },
+                    { type: "ถังเคมีแห้ง (สีแดง)", size: "15 ปอนด์", location: "ลานจอดรถ", point: "ซุ้ม รปภ. ประตูหน้า", status: "ชำรุดเกจตก" },
+                    { type: "ถังโฟม", size: "10 ลิตร", location: "อาคารหลัก", point: "ห้องครัวด้านหลัง", status: "ปกติพร้อมใช้งาน" }
+                ]
+            };
+        }
+
+        window.onload = fetchDashboardData;
+    </script>
+</body>
+</html>
